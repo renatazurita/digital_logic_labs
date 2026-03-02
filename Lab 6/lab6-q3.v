@@ -1,0 +1,45 @@
+module main(input [15:0] sw,
+            input [3:0] btn, 
+            output [7:0] D0_seg, D1_seg, 
+            output[3:0] D0_a, D1_a);
+          wire [7:0] segment0, segment1, segment2, segment3;
+    
+    assign D1_a = btn[3] ? 4'b0111 : btn[2] ? 4'b1011 : btn[1] ? 4'b1101 : btn[0] ? 4'b1110 : 4'b1111;
+    
+    hexEncode h0(sw[3:0], segment0);
+    hexEncode h1(sw[7:4], segment1);
+    hexEncode h2(sw[11:8], segment2);
+    hexEncode h3(sw[15:12], segment3);
+    
+    assign D1_seg = btn[3] ? segment3 : btn[2] ? segment2 : btn[1] ? segment1 : btn[0] ? segment0 : 8'b11111111;
+
+endmodule
+
+module hexEncode(
+    input [3:0] binary,
+    output [7:0] hexadecimal
+    );
+    reg [7:0] hex1;
+    always @(*) begin
+        case (binary)
+            4'b0000 : hex1 = 8'b11000000;
+            4'b0001 : hex1 = 8'b11111001;
+            4'b0010 : hex1 = 8'b10100100;
+            4'b0011 : hex1 = 8'b10110000;
+            4'b0100 : hex1 = 8'b10011001;
+            4'b0101 : hex1 = 8'b10010010;
+            4'b0110 : hex1 = 8'b10000010;
+            4'b0111 : hex1 = 8'b11111000;
+            4'b1000 : hex1 = 8'b10000000;
+            4'b1001 : hex1 = 8'b10010000;
+            4'b1010 : hex1 = 8'b10001000;
+            4'b1011 : hex1 = 8'b10000011;
+            4'b1100 : hex1 = 8'b11000110;
+            4'b1101 : hex1 = 8'b10100001;
+            4'b1110 : hex1 = 8'b10000110;
+            4'b1111 : hex1 = 8'b10001110;
+        endcase
+    end
+    assign hexadecimal = hex1;
+    
+endmodule

@@ -1,0 +1,2 @@
+There is a delay of 3 when d is low, and a delay of 2 when d is high.
+This is because the signal has to propagate through an extra nand gate when d is low.

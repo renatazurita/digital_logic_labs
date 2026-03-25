@@ -1,0 +1,28 @@
+module ClkDivider (input clk, output reg clk_div);
+	
+  	localparam maxCount = (50000000 - 1);
+	reg [25:0] count;
+  	wire mc;
+
+  assign mc = (count == maxCount);
+
+	always @ (posedge(clk)) begin
+      if (mc) 
+      	count <= 0;
+      else 
+      	count <= count + 1;
+  	end
+
+	always @ (posedge(clk)) begin
+      if (mc) 
+        clk_div = !clk_div;
+end
+endmodule
+
+module slow(input mclk, output [15:0] led);
+  
+  wire clk_div;
+  ClkDivider c1(mclk, clk_div);
+  assign led[0] = clk_div;
+  
+endmodule

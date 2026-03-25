@@ -1,0 +1,35 @@
+module main(input mclk, output [15:0] led);
+
+  counter c1(mclk, clkDiv);
+
+  wire clkDiv;
+  reg [15:0] count;
+ 
+ always @ (posedge clkDiv) begin
+    count <= count + 1;
+    if(count == 65535) begin
+    	count <= 0;
+    end
+ end
+ 
+ assign led[15:0] = count;
+  
+endmodule
+
+module counter(input clk, output clkDiv);
+    reg [25:0] count;
+    reg temp;
+	
+  localparam maxCount = (50000 - 1);
+
+	always @ (posedge(clk)) begin
+      if (count == maxCount) begin
+      	temp = ~temp;
+      	count <= 0;
+      end
+      else 
+      	count <= count + 1;
+      end
+
+    assign clkDiv = temp;
+endmodule

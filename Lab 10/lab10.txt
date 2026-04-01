@@ -1,0 +1,230 @@
+`timescale 1ns / 1ps
+//applying for extra credit, 5,6,7
+module Lab9_Stopwatch_proto(input clk, input [1:0] btn, output [7:0] D1_SEG,output [3:0] D1_AN);
+ 
+    wire clk1kHz;
+    clkDiv #(.LIMIT(50000)) clk_div_1k(
+        .clk(clk),
+        .reset(1'b0),
+        .clk_out(clk1kHz));
+    
+    wire btn1_sync, btn0_sync;
+    Sync #(.WIDTH(1)) sync_btn1(.clk(clk), .in(btn[1]), .out(btn1_sync));
+    Sync #(.WIDTH(1)) sync_btn0(.clk(clk), .in(btn[0]), .out(btn0_sync));
+    wire btn1_clean, btn0_clean;
+    Debounce db1(.fastClk(clk), .in(btn1_sync), .out(btn1_clean));
+    Debounce db0(.fastClk(clk), .in(btn0_sync), .out(btn0_clean));
+    
+    wire btn1_press, btn0_press;
+    EdgeDetect ed1(.clk(clk), .in(btn1_clean), .rise(btn1_press));
+    EdgeDetect ed0(.clk(clk), .in(btn0_clean), .rise(btn0_press));
+ 
+    reg running = 0;    
+    reg lap = 0;        
+ 
+    always @(posedge clk) begin
+        
+        if (btn1_press) begin
+            running <= ~running;
+            if (running) 
+                lap <= 0; 
+        end      
+        if (btn0_press) begin
+            if (!running) begin    
+            end else begin
+                lap <= ~lap; 
+            end
+        end
+    end
+   
+    wire reset_timer = btn0_press & ~running;
+    
+    wire [15:0] BCD_count;  
+    Stopwatch4 sw(
+        .clk1kHz(clk1kHz),
+        .reset(reset_timer),
+        .run(running),
+        .BCD_digits(BCD_count)
+    );
+    reg [15:0] lap_value = 0;
+    always @(posedge clk) begin
+        if (reset_timer)
+            lap_value <= 0;
+        else if (btn0_press && running && !lap)
+            lap_value <= BCD_count; 
+    end
+    
+    wire [15:0] display_val = lap ? lap_value : BCD_count;
+    wire [7:0] seg_raw;
+    wire [3:0] an_raw;
+    HexDisplay4 hex_disp(
+        .clk(clk),
+        .in(display_val),
+        .D_SEG(seg_raw),
+        .D_AN(an_raw)
+    );
+   
+    DecPoint dp(
+        .inSEG(seg_raw),
+        .inAN(an_raw),
+        .decPoint(4'b1000),
+        .outSEG(D1_SEG)
+    );
+    assign D1_AN = an_raw;
+ 
+endmodule
+
+ 
+module clkDiv #(parameter LIMIT = 50000)(
+    input clk,
+    input reset,
+    output reg clk_out = 0);
+    
+    reg [31:0] count = 0;
+ 
+    always @(posedge clk) begin
+        if (reset) begin
+            count <= 0;
+            clk_out <= 0;
+        end else if (count == LIMIT - 1) begin
+            count <= 0;
+            clk_out <= ~clk_out;
+        end else begin
+            count <= count + 1;
+        end
+    end
+endmodule
+ 
+module BCD_Digit(
+    input clk,
+    input reset,
+    input enable,
+    output reg [3:0] digit = 0,
+    output Iam9  
+);
+    assign Iam9 = (digit == 4'd9) && enable;
+ 
+    always @(posedge clk or posedge reset) begin
+        if (reset)
+            digit <= 0;
+        else if (enable) begin
+            if (digit == 4'd9)
+                digit <= 0;
+            else
+                digit <= digit + 1;
+        end
+    end
+endmodule
+ 
+module Stopwatch4(input clk1kHz,input reset, input run, output [15:0] BCD_digits );
+    wire [3:0] d0, d1, d2, d3;
+    wire c0, c1, c2;
+    
+    BCD_Digit dig0(.clk(clk1kHz), .reset(reset), .enable(run),      .digit(d0), .Iam9(c0));
+    
+    BCD_Digit dig1(.clk(clk1kHz), .reset(reset), .enable(c0),       .digit(d1), .Iam9(c1));
+    BCD_Digit dig2(.clk(clk1kHz), .reset(reset), .enable(c0 & c1),  .digit(d2), .Iam9(c2));
+  
+    BCD_Digit dig3(.clk(clk1kHz), .reset(reset), .enable(c0 & c1 & c2), .digit(d3), .Iam9());
+ 
+    assign BCD_digits = {d3, d2, d1, d0};
+endmodule
+
+module HexDisplay4(
+    input clk,          
+    input [15:0] in,     
+    output reg [7:0] D_SEG,  
+    output reg [3:0] D_AN );
+    
+    reg [17:0] refresh_cnt = 0;
+    wire [1:0] digit_sel = refresh_cnt[17:16];
+ 
+    always @(posedge clk)
+        refresh_cnt <= refresh_cnt + 1;
+ 
+    reg [3:0] hex_val;
+    always @(*) begin
+        case (digit_sel)
+            2'd0: begin hex_val = in[3:0];   D_AN = 4'b1110; end
+            2'd1: begin hex_val = in[7:4];   D_AN = 4'b1101; end
+            2'd2: begin hex_val = in[11:8];  D_AN = 4'b1011; end
+            2'd3: begin hex_val = in[15:12]; D_AN = 4'b0111; end
+        endcase
+    end
+ 
+    always @(*) begin
+        case (hex_val)
+            4'h0: D_SEG = 8'b11000000;
+            4'h1: D_SEG = 8'b11111001;
+            4'h2: D_SEG = 8'b10100100;
+            4'h3: D_SEG = 8'b10110000;
+            4'h4: D_SEG = 8'b10011001;
+            4'h5: D_SEG = 8'b10010010;
+            4'h6: D_SEG = 8'b10000010;
+            4'h7: D_SEG = 8'b11111000;
+            4'h8: D_SEG = 8'b10000000;
+            4'h9: D_SEG = 8'b10010000;
+            default: D_SEG = 8'b11111111; 
+        endcase
+    end
+endmodule
+ 
+module DecPoint(
+    input [7:0] inSEG,
+    input [3:0] inAN,
+    input [3:0] decPoint,   
+    output [7:0] outSEG
+);
+    wire dp_on = (decPoint[0] & ~inAN[0]) |
+                 (decPoint[1] & ~inAN[1]) |
+                 (decPoint[2] & ~inAN[2]) |
+                 (decPoint[3] & ~inAN[3]);
+ 
+    assign outSEG = dp_on ? {1'b0, inSEG[6:0]} : inSEG;
+endmodule
+ 
+module Sync #(parameter WIDTH = 1)(
+    input clk,
+    input [WIDTH-1:0] in,
+    output [WIDTH-1:0] out);
+    reg [WIDTH-1:0] stage1 = 0, stage2 = 0;
+ 
+    always @(posedge clk) begin
+        stage1 <= in;
+        stage2 <= stage1;
+    end
+ 
+    assign out = stage2;
+endmodule
+ 
+module Debounce(
+    input fastClk,  
+    input in,
+    output reg out = 0
+);
+   
+    reg [19:0] count = 0;
+    reg last_in = 0;
+ 
+    always @(posedge fastClk) begin
+        if (in != last_in) begin
+            count <= 0;
+            last_in <= in;
+        end else if (count == 20'd999_999) begin
+            out <= last_in;
+        end else begin
+            count <= count + 1;
+        end
+    end
+endmodule
+ 
+module EdgeDetect(
+    input clk,
+    input in,
+    output rise);
+    reg prev = 0;
+    always @(posedge clk)
+        prev <= in;
+ 
+    assign rise = in & ~prev;
+endmodule

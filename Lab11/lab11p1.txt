@@ -1,0 +1,119 @@
+`timescale 1ns / 1ps
+
+module proto_QuadratureEncoder(input clk, input [15:0] sw,input [0:0] btn,output [7:0] D0_SEG,output [3:0] D0_AN);
+
+    wire A_sync, B_sync, reset_sync;
+    
+    sync sync_a(.clock(clk), .in(sw[0]),  .out(A_sync)); 
+     
+    sync sync_b(.clock(clk), .in(sw[15]),  .out(B_sync)); 
+    sync sync_r(.clock(clk), .in(btn[0]), .out(reset_sync));
+
+    wire [15:0] count;
+    QuadratureEncoder qe(
+        .clk(clk),
+        .reset(reset_sync),
+        .A(A_sync),
+        .B(B_sync),
+        .count(count));
+    HexDisplay4 hex_disp(
+        .clk(clk),
+        .in(count),
+        .D_SEG(D0_SEG),
+        .D_AN(D0_AN));
+endmodule
+
+
+module QuadratureEncoder(
+    input clk,
+    input reset,
+    input A,
+    input B,
+    output reg [15:0] count = 0);
+    reg [1:0] state = 2'b00;
+    wire [1:0] AB = {A, B};
+
+    always @(posedge clk) begin
+        if (reset) begin
+            state <= 2'b00;
+            count <= 16'd0;
+            
+        end else if (AB != state) begin
+        
+            case (state)
+                2'b00: begin
+                    if (AB == 2'b01) count <= count + 1;    
+                    else if (AB == 2'b10) count <= count - 1; 
+                end
+                
+                2'b01: begin
+                    if (AB == 2'b11) count <= count + 1;      
+                    else if (AB == 2'b00) count <= count - 1;  
+                end
+                2'b11: begin
+                    if (AB == 2'b10) count <= count + 1;   
+                    else if (AB == 2'b01) count <= count - 1;  
+                end
+                
+                2'b10: begin
+                    if (AB == 2'b00) count <= count + 1;      
+                    else if (AB == 2'b11) count <= count - 1;  
+                end
+                
+            endcase
+            
+            state <= AB; 
+            
+        end
+    end
+
+endmodule
+module sync(input clock, input in,output reg out);
+    reg sus;
+    always @(negedge clock)
+        sus <= in;
+    always @(posedge clock)
+        out <= sus;
+        
+endmodule
+
+module HexDisplay4(input clk, input [15:0] in,output reg [7:0] D_SEG, output reg [3:0] D_AN );
+    reg [17:0] refresh_cnt = 0;
+    wire [1:0] digit_sel = refresh_cnt[17:16];
+    always @(posedge clk)
+        refresh_cnt <= refresh_cnt + 1;
+    reg [3:0] hex_val;
+    
+    always @(*) begin
+        case (digit_sel)
+            2'd0: begin hex_val = in[3:0];   D_AN = 4'b1110; end  
+            2'd1: begin hex_val = in[7:4];   D_AN = 4'b1101; end
+            2'd2: begin hex_val = in[11:8];  D_AN = 4'b1011; end
+            2'd3: begin hex_val = in[15:12]; D_AN = 4'b0111; end 
+        endcase
+        
+    end
+
+    always @(*) begin
+        case (hex_val)
+            4'h0: D_SEG = 8'b11000000;
+            4'h1: D_SEG = 8'b11111001;
+            4'h2: D_SEG = 8'b10100100;
+            4'h3: D_SEG = 8'b10110000;
+            4'h4: D_SEG = 8'b10011001;
+            4'h5: D_SEG = 8'b10010010;
+            4'h6: D_SEG = 8'b10000010;
+            4'h7: D_SEG = 8'b11111000;
+            4'h8: D_SEG = 8'b10000000;
+            4'h9: D_SEG = 8'b10010000;
+            4'hA: D_SEG = 8'b10001000;
+            4'hB: D_SEG = 8'b10000011;
+            4'hC: D_SEG = 8'b11000110;
+            4'hD: D_SEG = 8'b10100001;
+            4'hE: D_SEG = 8'b10000110;
+            4'hF: D_SEG = 8'b10001110;
+            default: D_SEG = 8'b11111111;
+        endcase
+        
+    end
+endmodule

@@ -1,0 +1,132 @@
+`timescale 1ns / 1ps
+
+module proto_CombinationLock(
+    input clk,
+    input [3:0] btn,
+    output [2:0] RGB0
+    );
+
+    wire [3:0] btn_sync;
+
+    SyncN #(.WIDTH(4)) sync_buttons(
+        .clock(clk),
+        .in(btn),
+        .out(btn_sync)
+    );
+
+    CombinationLockFSM lock_fsm(
+        .clk(clk),
+        .btn(btn_sync),
+        .RGB0(RGB0)
+    );
+
+endmodule
+
+
+module CombinationLockFSM(
+    input clk,
+    input [3:0] btn,
+    output reg [2:0] RGB0 = 3'b001
+    );
+
+    reg [2:0] state = 3'd0;
+    reg [2:0] next_state = 3'd0;
+
+    reg [3:0] btnOld = 4'b0000;
+    wire [3:0] pressed;
+
+    assign pressed = btn & ~btnOld;
+
+    parameter IDLE    = 3'd0;
+    parameter S1      = 3'd1;
+    parameter S2      = 3'd2;
+    parameter S3      = 3'd3;
+    parameter SUCCESS = 3'd4;
+
+    always @(posedge clk) begin
+        btnOld <= btn;
+        state <= next_state;
+    end
+
+    always @(*) begin
+        case (state)
+
+            IDLE: begin
+                if (pressed[2])
+                    next_state = S1;
+                else if (|pressed)
+                    next_state = IDLE;
+                else
+                    next_state = IDLE;
+            end
+
+            S1: begin
+                if (pressed[1])
+                    next_state = S2;
+                else if (|pressed)
+                    next_state = IDLE;
+                else
+                    next_state = S1;
+            end
+
+            S2: begin
+                if (pressed[1])
+                    next_state = S3;
+                else if (|pressed)
+                    next_state = IDLE;
+                else
+                    next_state = S2;
+            end
+
+            S3: begin
+                if (pressed[3])
+                    next_state = SUCCESS;
+                else if (|pressed)
+                    next_state = IDLE;
+                else
+                    next_state = S3;
+            end
+
+            SUCCESS: begin
+                if (|pressed)
+                    next_state = IDLE;
+                else
+                    next_state = SUCCESS;
+            end
+
+            default: begin
+                next_state = IDLE;
+            end
+
+        endcase
+    end
+
+    always @(*) begin
+        case (state)
+            IDLE:    RGB0 = 3'b001; // Red
+            S1:      RGB0 = 3'b100; // Blue
+            S2:      RGB0 = 3'b100; // Blue
+            S3:      RGB0 = 3'b100; // Blue
+            SUCCESS: RGB0 = 3'b010; // Green
+            default: RGB0 = 3'b001; // Red
+        endcase
+    end
+
+endmodule
+
+
+module SyncN #(parameter WIDTH = 4)(
+    input clock,
+    input [WIDTH-1:0] in,
+    output reg [WIDTH-1:0] out
+    );
+
+    reg [WIDTH-1:0] sus;
+
+    always @(negedge clock)
+        sus <= in;
+
+    always @(posedge clock)
+        out <= sus;
+
+endmodule
